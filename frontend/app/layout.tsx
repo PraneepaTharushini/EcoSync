@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'SolarSense — Home Solar Forecast',
+  title: 'EcoSync — Home Solar Forecast',
   description: 'Know when your solar panels will shine brightest and make the most of your home energy.',
   generator: 'v0.app',
   icons: {
