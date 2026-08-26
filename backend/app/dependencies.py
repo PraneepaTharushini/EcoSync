@@ -14,6 +14,8 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """Use this as a dependency on any route that requires login,
+    e.g. def get_panel_specs(user: User = Depends(get_current_user))."""
     try:
         user_id = decode_access_token(credentials.credentials)
     except JWTError:

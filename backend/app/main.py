@@ -5,6 +5,7 @@ from app.routers import auth
 
 app = FastAPI(title="SolarSense API")
 
+# During dev, allow the Next.js dev server. Tighten this before deploying.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
