@@ -24,18 +24,18 @@ def get_raw_forecast(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach weather provider: {e}")
 
-    stored_count = normalize_and_store(raw, db)
+    stored_count = normalize_and_store(raw, db, lat=lat, lon=lon)
 
     rows = (
         db.query(WeatherForecast)
-        .filter(WeatherForecast.latitude == raw["latitude"], WeatherForecast.longitude == raw["longitude"])
+        .filter(WeatherForecast.latitude == lat, WeatherForecast.longitude == lon)
         .order_by(WeatherForecast.forecast_time)
         .all()
     )
 
     return {
-        "latitude": raw["latitude"],
-        "longitude": raw["longitude"],
+        "latitude": lat,
+        "longitude": lon,
         "stored_count": stored_count,
         "hourly": [
             {
@@ -73,7 +73,7 @@ def get_predicted_forecast(
 
     try:
         raw = fetch_weather(panel_spec.latitude, panel_spec.longitude)
-        normalize_and_store(raw, db)
+        normalize_and_store(raw, db, lat=panel_spec.latitude, lon=panel_spec.longitude)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach weather provider: {e}")
 
