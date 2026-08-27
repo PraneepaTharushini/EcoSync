@@ -20,15 +20,9 @@ def fetch_weather(lat: float, lon: float, forecast_days: int = 2) -> dict:
     response.raise_for_status()
     return response.json()
 
-
-def normalize_and_store(raw: dict, db: Session) -> int:
-    """
-    Takes the raw Open-Meteo response, zips the parallel hourly arrays into
-    individual rows, and upserts them into weather_forecasts.
-    Returns the number of rows written.
-    """
-    lat = raw["latitude"]
-    lon = raw["longitude"]
+def normalize_and_store(raw: dict, db: Session, lat: float = None, lon: float = None) -> int:
+    lat = lat if lat is not None else raw["latitude"]
+    lon = lon if lon is not None else raw["longitude"]
     hourly = raw["hourly"]
 
     times = hourly["time"]
