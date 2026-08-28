@@ -21,6 +21,20 @@ export interface SignupPayload {
   password: string
 }
 
+export interface HourlyPrediction {
+  forecast_time: string
+  predicted_kwh: number
+  model_version: string
+}
+
+export interface PredictedForecastResponse {
+  user_id: string
+  capacity_kw: number
+  orientation: string
+  predicted_count: number
+  hourly: HourlyPrediction[]
+}
+
 export interface ApiError {
   detail: string
 }

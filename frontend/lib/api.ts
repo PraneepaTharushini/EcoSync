@@ -1,4 +1,4 @@
-import type { AuthResponse, LoginPayload, SignupPayload, ApiError } from './types'
+import type { AuthResponse, LoginPayload, SignupPayload, PredictedForecastResponse, ApiError } from './types'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -45,4 +45,20 @@ export function getToken(): string | null {
 
 export function clearToken() {
   if (typeof window !== 'undefined') localStorage.removeItem(TOKEN_KEY)
+}
+
+export async function getPredictedForecast(): Promise<PredictedForecastResponse> {
+  const token = getToken()
+  if (!token) throw new Error('Not logged in.')
+
+  const res = await fetch(`${API_URL}/forecast/predicted`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!res.ok) {
+    const err: ApiError = await res.json().catch(() => ({ detail: 'Could not load your forecast.' }))
+    throw new Error(err.detail || 'Could not load your forecast.')
+  }
+
+  return res.json()
 }
