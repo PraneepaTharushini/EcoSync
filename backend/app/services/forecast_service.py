@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -6,8 +7,10 @@ from app.models.panel_spec import PanelSpec
 from app.models.predicted_output import PredictedOutput
 from app.models.weather_forecast import WeatherForecast
 
-STANDARD_TEST_IRRADIANCE = 1000.0  # W/m^2, the irradiance panels are rated at
-DEFAULT_PERFORMANCE_RATIO = 0.80  # accounts for real-world losses: dust, wiring, inverter, heat
+logger = logging.getLogger("forecast_service")
+
+STANDARD_TEST_IRRADIANCE = 1000.0
+DEFAULT_PERFORMANCE_RATIO = 0.80
 
 ORIENTATION_FACTOR = {
     "S": 1.00,
@@ -25,8 +28,8 @@ def calculate_physics_baseline(
 ) -> float:
     """
     Predicts kWh output for a single hour given that hour's irradiance and the
-    panel's rated capacity. This is the physics-formula fallback — no ML, no
-    historical training data required, works from day one.
+    panel's rated capacity. This is the physics-formula fallback — used if the
+    ML model is unavailable or fails for any reason.
     """
     if irradiance is None or irradiance <= 0:
         return 0.0
@@ -41,11 +44,37 @@ def calculate_physics_baseline(
     return round(predicted_kwh, 4)
 
 
+def predict_hour(w: WeatherForecast, panel_spec: PanelSpec) -> tuple[float, str]:
+    """
+    Predicts kWh for one hour, preferring the trained ML model and falling
+    back to the physics baseline if the model is unavailable or errors.
+    Returns (predicted_kwh, model_version).
+    """
+    try:
+        from app.ml.model_runtime import predict_kwh
+
+        kwh = predict_kwh(
+            irradiance=w.irradiance or 0.0,
+            ambient_temperature=w.temperature or 25.0,
+            forecast_time=w.forecast_time,
+            capacity_kw=panel_spec.capacity_kw,
+        )
+        return kwh, "rf-v1"
+    except Exception as e:
+        logger.warning(f"ML prediction failed, falling back to physics baseline: {e}")
+        kwh = calculate_physics_baseline(
+            irradiance=w.irradiance,
+            capacity_kw=panel_spec.capacity_kw,
+            orientation=panel_spec.orientation,
+        )
+        return kwh, "physics-baseline-v1"
+
+
 def generate_forecast_for_panel_spec(panel_spec: PanelSpec, db: Session) -> int:
     """
-    Looks up cached weather for this panel's location, runs the physics baseline
-    on every available hour, and upserts the results into predicted_output.
-    Returns the number of hours predicted.
+    Looks up cached weather for this panel's location, predicts each hour
+    (ML model preferred, physics baseline as fallback), and upserts the
+    results into predicted_output. Returns the number of hours predicted.
     """
     weather_rows = (
         db.query(WeatherForecast)
@@ -59,11 +88,7 @@ def generate_forecast_for_panel_spec(panel_spec: PanelSpec, db: Session) -> int:
 
     count = 0
     for w in weather_rows:
-        predicted_kwh = calculate_physics_baseline(
-            irradiance=w.irradiance,
-            capacity_kw=panel_spec.capacity_kw,
-            orientation=panel_spec.orientation,
-        )
+        predicted_kwh, model_version = predict_hour(w, panel_spec)
 
         existing = (
             db.query(PredictedOutput)
@@ -76,14 +101,14 @@ def generate_forecast_for_panel_spec(panel_spec: PanelSpec, db: Session) -> int:
 
         if existing:
             existing.predicted_kwh = predicted_kwh
-            existing.model_version = "physics-baseline-v1"
+            existing.model_version = model_version
         else:
             db.add(
                 PredictedOutput(
                     user_id=panel_spec.user_id,
                     forecast_time=w.forecast_time,
                     predicted_kwh=predicted_kwh,
-                    model_version="physics-baseline-v1",
+                    model_version=model_version,
                 )
             )
         count += 1
